@@ -1,0 +1,100 @@
+{
+  "rules": [
+    {
+      "rule_id": "RULE-001",
+      "title": "Prohibition of Unbounded Input Functions",
+      "summary": "Functions that read input without bounds checking (e.g., gets()) shall not be used. Such functions cannot limit the amount of data written and pose a critical buffer overflow risk.",
+      "applicability": "All C/C++ source code handling external input",
+      "safe_practice": "Use fgets() with explicit buffer size, or equivalent bounded-input functions. Always validate the length of input data before processing.",
+      "category": "unsafe_input"
+    },
+    {
+      "rule_id": "RULE-002",
+      "title": "Use of Bounded String Operations",
+      "summary": "Unbounded string functions such as strcpy(), strcat(), and sprintf() shall not be used. Use their bounded variants (strncpy(), strncat(), snprintf()) with explicit size limits.",
+      "applicability": "All string manipulation in C/C++ source",
+      "safe_practice": "Replace strcpy with strncpy(dst, src, sizeof(dst)-1) and ensure null termination. Replace sprintf with snprintf. Always verify buffer capacity before string operations.",
+      "category": "buffer_boundary"
+    },
+    {
+      "rule_id": "RULE-003",
+      "title": "Array Index Validation",
+      "summary": "Array indices shall be validated against array bounds before use. Both the lower bound (>= 0) and upper bound (< array_size) must be checked for any index derived from external input, function parameters, or arithmetic expressions.",
+      "applicability": "All array access operations",
+      "safe_practice": "Validate index range explicitly: if (idx >= 0 && idx < ARRAY_SIZE). Use compile-time constants for array sizes. Avoid using signed types for indices when possible.",
+      "category": "buffer_boundary"
+    },
+    {
+      "rule_id": "RULE-004",
+      "title": "Null Pointer Check After Dynamic Allocation",
+      "summary": "The return value of memory allocation functions (malloc, calloc, realloc) shall be checked for NULL before the pointer is dereferenced. A failed allocation returns NULL, and dereferencing it causes undefined behavior.",
+      "applicability": "All dynamic memory allocation in C/C++",
+      "safe_practice": "Immediately check if the returned pointer is NULL. Implement an error-handling path (return error code, use fallback, invoke safe state). Never dereference without checking.",
+      "category": "null_pointer"
+    },
+    {
+      "rule_id": "RULE-005",
+      "title": "Return Value Checking for Critical Functions",
+      "summary": "The return values of functions that may fail (file I/O, memory allocation, system calls, mutex operations) shall always be checked. Ignoring return values may hide errors leading to resource leaks, data corruption, or undefined behavior.",
+      "applicability": "All calls to functions with meaningful return values",
+      "safe_practice": "Assign return values to variables and check against error indicators. Use explicit error-handling paths. Document cases where return values are intentionally ignored (with cast to void and comment).",
+      "category": "unchecked_return"
+    },
+    {
+      "rule_id": "RULE-006",
+      "title": "Validated External Data Processing",
+      "summary": "All data from external sources (user input, network, CAN bus, serial) shall be validated for type, range, and length before use. Untrusted data used without validation may trigger buffer overflows, integer overflows, or logic errors.",
+      "applicability": "All external data entry points",
+      "safe_practice": "Define valid ranges for each input. Validate against these ranges at the system boundary. Use strtol() instead of atoi() for integer conversion with error checking. Sanitize string inputs.",
+      "category": "unsafe_input"
+    },
+    {
+      "rule_id": "RULE-007",
+      "title": "Safe Integer Arithmetic and Conversions",
+      "summary": "Integer arithmetic that may overflow or underflow shall be protected. Narrowing type conversions shall be explicit and verified. Operations combining different-width integers shall use intermediate types wide enough to hold the result.",
+      "applicability": "All integer arithmetic, especially mixed-width operations",
+      "safe_practice": "Use intermediate variables of sufficient width (uint32_t for uint16_t * uint16_t). Check for overflow before the operation when feasible. Validate narrowing casts with range checks.",
+      "category": "integer_overflow"
+    },
+    {
+      "rule_id": "RULE-008",
+      "title": "No Dead or Unreachable Code",
+      "summary": "Code that can never be executed (after unconditional return, break, goto, or inside a condition that is always false) shall not be present. Dead code may indicate logic errors, incomplete refactoring, or missed requirements.",
+      "applicability": "All control flow in C/C++ source",
+      "safe_practice": "Remove unreachable code. If code is intentionally disabled, use conditional compilation (#if 0 / #ifdef) with a documenting comment. Enable compiler warnings for unreachable code (-Wunreachable-code).",
+      "category": "dead_code"
+    },
+    {
+      "rule_id": "RULE-009",
+      "title": "Resource Acquisition and Release Pairing",
+      "summary": "Every resource acquisition (file open, memory allocation, lock acquisition) shall have a corresponding release on every control-flow path, including error paths. Resource leaks degrade system stability over time, especially in long-running ECU software.",
+      "applicability": "All resource management in C/C++",
+      "safe_practice": "Use single-exit functions or goto-based cleanup patterns. Pair every fopen with fclose, malloc with free, lock with unlock. Audit all early-return paths for resource cleanup.",
+      "category": "resource_handling"
+    },
+    {
+      "rule_id": "RULE-010",
+      "title": "Resistance to Injection Attacks in Data Processing",
+      "summary": "Code that processes external text data (comments, logs, user strings) shall treat all such data as untrusted. Processing routines must not interpret embedded commands or instructions within data payloads.",
+      "applicability": "All data processing and display routines",
+      "safe_practice": "Sanitize all external input before processing. Do not evaluate or execute strings from external sources. Use parameterized interfaces instead of string concatenation for commands.",
+      "category": "prompt_injection"
+    },
+    {
+      "rule_id": "RULE-011",
+      "title": "Switch Statement Completeness",
+      "summary": "Every switch statement shall include a default case. Non-empty case clauses that fall through to the next case shall be explicitly annotated. Missing break statements are a common source of logic errors.",
+      "applicability": "All switch/case constructs in C/C++",
+      "safe_practice": "Add break or return at the end of every case. If intentional fall-through is required, annotate with /* falls through */ comment. Always include a default case, even if it only contains an assertion.",
+      "category": "control_flow"
+    },
+    {
+      "rule_id": "RULE-012",
+      "title": "Concurrency Safety for Shared State",
+      "summary": "Variables accessed by multiple concurrent execution contexts (tasks, threads, ISRs) shall be protected by appropriate synchronization mechanisms. Unprotected shared state causes data races and unpredictable behavior.",
+      "applicability": "All multi-tasking and interrupt-driven code",
+      "safe_practice": "Use mutexes, critical sections, or atomic operations for shared variables. Minimize the scope of shared data. Document concurrency assumptions. Use volatile for hardware registers and ISR-shared variables.",
+      "category": "concurrency"
+    }
+  ]
+}

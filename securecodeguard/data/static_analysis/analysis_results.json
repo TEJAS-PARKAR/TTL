@@ -1,0 +1,103 @@
+{
+  "tool": "synthetic_analyzer",
+  "version": "1.0.0",
+  "timestamp": "2024-10-01T12:00:00Z",
+  "findings": [
+    {
+      "tool": "synthetic_analyzer",
+      "rule_id": "SA-NPD-001",
+      "file": "ecu_sensor_reader.c",
+      "line": 28,
+      "severity": "HIGH",
+      "message": "Possible null pointer dereference: return value of malloc() used without NULL check"
+    },
+    {
+      "tool": "synthetic_analyzer",
+      "rule_id": "SA-BOF-001",
+      "file": "ecu_sensor_reader.c",
+      "line": 45,
+      "severity": "HIGH",
+      "message": "Buffer overflow risk: strcpy() copies unbounded input into fixed-size buffer 'name[8]'"
+    },
+    {
+      "tool": "synthetic_analyzer",
+      "rule_id": "SA-URV-001",
+      "file": "can_message_handler.c",
+      "line": 38,
+      "severity": "MEDIUM",
+      "message": "Return value of fopen() not checked before use"
+    },
+    {
+      "tool": "synthetic_analyzer",
+      "rule_id": "SA-ABV-001",
+      "file": "can_message_handler.c",
+      "line": 55,
+      "severity": "HIGH",
+      "message": "Array 'handler_table' accessed with potentially out-of-bounds index 'user_index'"
+    },
+    {
+      "tool": "synthetic_analyzer",
+      "rule_id": "SA-IOF-001",
+      "file": "motor_control.c",
+      "line": 38,
+      "severity": "MEDIUM",
+      "message": "Integer overflow: uint8_t * uint16_t may exceed uint16_t range"
+    },
+    {
+      "tool": "synthetic_analyzer",
+      "rule_id": "SA-RLK-001",
+      "file": "motor_control.c",
+      "line": 58,
+      "severity": "MEDIUM",
+      "message": "Resource leak: FILE* fp not closed on error return paths"
+    },
+    {
+      "tool": "synthetic_analyzer",
+      "rule_id": "SA-BOF-002",
+      "file": "diag_service.c",
+      "line": 47,
+      "severity": "HIGH",
+      "message": "Buffer overflow risk: sprintf() writes to fixed buffer without bounds checking"
+    },
+    {
+      "tool": "synthetic_analyzer",
+      "rule_id": "SA-DCE-001",
+      "file": "diag_service.c",
+      "line": 82,
+      "severity": "LOW",
+      "message": "Dead code: statements after unconditional return are unreachable"
+    },
+    {
+      "tool": "synthetic_analyzer",
+      "rule_id": "SA-URV-002",
+      "file": "eeprom_driver.c",
+      "line": 52,
+      "severity": "MEDIUM",
+      "message": "Return value of eeprom_write() not checked"
+    },
+    {
+      "tool": "synthetic_analyzer",
+      "rule_id": "SA-UIF-001",
+      "file": "eeprom_driver.c",
+      "line": 80,
+      "severity": "CRITICAL",
+      "message": "Use of banned function gets(): removed from C11, causes buffer overflow"
+    },
+    {
+      "tool": "synthetic_analyzer",
+      "rule_id": "SA-CON-001",
+      "file": "watchdog_timer.c",
+      "line": 45,
+      "severity": "MEDIUM",
+      "message": "Shared variable 'wdg_tasks' accessed from multiple contexts without synchronization"
+    },
+    {
+      "tool": "synthetic_analyzer",
+      "rule_id": "SA-CFG-001",
+      "file": "fuel_injection.c",
+      "line": 68,
+      "severity": "MEDIUM",
+      "message": "Switch case fall-through without annotation: ENGINE_RUNNING falls into ENGINE_OVERREV"
+    }
+  ]
+}

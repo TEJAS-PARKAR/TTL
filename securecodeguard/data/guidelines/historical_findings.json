@@ -1,0 +1,60 @@
+{
+  "findings": [
+    {
+      "finding_id": "HIST-001",
+      "category": "buffer_boundary",
+      "severity": "HIGH",
+      "title": "Buffer overflow in CAN frame parser via strcpy",
+      "file": "can_parser_v1.c",
+      "function": "parse_can_payload",
+      "line_start": 45,
+      "evidence": "strcpy(local_buf, payload_str) where local_buf is 8 bytes",
+      "rule_refs": ["RULE-002"],
+      "suggested_fix": "Replace strcpy with strncpy(local_buf, payload_str, sizeof(local_buf)-1)",
+      "status": "ACCEPTED",
+      "resolution_date": "2024-06-15"
+    },
+    {
+      "finding_id": "HIST-002",
+      "category": "null_pointer",
+      "severity": "HIGH",
+      "title": "Null dereference after failed sensor allocation",
+      "file": "sensor_manager_v2.c",
+      "function": "init_sensor_pool",
+      "line_start": 32,
+      "evidence": "malloc() return used without NULL check",
+      "rule_refs": ["RULE-004"],
+      "suggested_fix": "Add if (ptr == NULL) { return ERROR; } immediately after malloc",
+      "status": "ACCEPTED",
+      "resolution_date": "2024-07-20"
+    },
+    {
+      "finding_id": "HIST-003",
+      "category": "unchecked_return",
+      "severity": "MEDIUM",
+      "title": "fopen return value not checked in logger",
+      "file": "data_logger_v1.c",
+      "function": "log_event",
+      "line_start": 88,
+      "evidence": "FILE* fp = fopen(path, \"a\"); fprintf(fp, ...) without NULL check",
+      "rule_refs": ["RULE-005"],
+      "suggested_fix": "Add NULL check after fopen and return error code on failure",
+      "status": "ACCEPTED",
+      "resolution_date": "2024-08-10"
+    },
+    {
+      "finding_id": "HIST-004",
+      "category": "integer_overflow",
+      "severity": "MEDIUM",
+      "title": "16-bit multiplication overflow in ADC conversion",
+      "file": "adc_driver_v1.c",
+      "function": "convert_raw_to_mv",
+      "line_start": 23,
+      "evidence": "uint16_t result = raw_val * vref_mv / 4096 overflows for large raw_val",
+      "rule_refs": ["RULE-007"],
+      "suggested_fix": "Use uint32_t intermediate: uint32_t temp = (uint32_t)raw_val * vref_mv / 4096",
+      "status": "ACCEPTED",
+      "resolution_date": "2024-09-05"
+    }
+  ]
+}

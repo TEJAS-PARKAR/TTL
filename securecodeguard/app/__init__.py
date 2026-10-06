@@ -1,0 +1,1 @@
+"""SecureCodeGuard – App package."""
