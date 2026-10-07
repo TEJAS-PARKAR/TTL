@@ -38,6 +38,20 @@ from pydantic import Field
 # Project root is the directory containing this package's parent
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+try:
+    from pydantic_settings import SettingsConfigDict
+    _MODEL_CONFIG = SettingsConfigDict(
+        env_file=str(_PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+except Exception:
+    try:
+        from pydantic import ConfigDict
+        _MODEL_CONFIG = ConfigDict(extra="ignore")
+    except Exception:
+        _MODEL_CONFIG = {"extra": "ignore"}
+
 
 class Settings(BaseSettings):
     """Application-wide settings loaded from environment / .env file."""
@@ -87,10 +101,7 @@ class Settings(BaseSettings):
     # ── Seed ─────────────────────────────────────────────────────────
     random_seed: int = Field(default=42)
 
-    class Config:
-        env_file = str(_PROJECT_ROOT / ".env")
-        env_file_encoding = "utf-8"
-        extra = "ignore"
+    model_config = _MODEL_CONFIG
 
     # ── Helpers ──────────────────────────────────────────────────────
     def resolve_path(self, relative_path: str) -> Path:

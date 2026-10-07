@@ -100,22 +100,18 @@ securecodeguard/
 
 ## 5. Running the Application
 
-### Option A: Streamlit Web UI (Interactive Mode)
+### Quick Start (Standalone Mode):
+Simply run the single unified entrypoint:
 ```bash
-streamlit run ui/streamlit_app.py
+python app.py
 ```
-Open [http://localhost:8501](http://localhost:8501) in your browser.
+*(Or double-click `run.bat` on Windows)*
 
-### Option B: FastAPI Backend Server
+Alternatively, run directly via Streamlit:
 ```bash
-python app/main.py
+streamlit run app.py
 ```
-API Documentation will be available at [http://localhost:8000/docs](http://localhost:8000/docs).
-
-### Option C: Docker Container
-```bash
-docker-compose up --build
-```
+Open [http://localhost:8501](http://localhost:8501) in your web browser.
 
 ---
 

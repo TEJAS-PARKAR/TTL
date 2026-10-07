@@ -1,41 +1,22 @@
-# SecureCodeGuard Dependencies
+# SecureCodeGuard – Essential Requirements
 # Python 3.10+
 
-# ── Web Framework ────────────────────────────────────────────────────
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
+# ── Web UI ────────────────────────────────────────────────────────────
+streamlit>=1.29.0
+pandas>=2.0.0
 
-# ── UI ───────────────────────────────────────────────────────────────
-streamlit==1.29.0
+# ── Data Validation & Settings ───────────────────────────────────────
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
 
-# ── LLM / Ollama ────────────────────────────────────────────────────
-ollama==0.1.7
-httpx==0.25.2
+# ── HTTP Client (Local Ollama Communication) ─────────────────────────
+httpx>=0.25.0
 
-# ── Embeddings ───────────────────────────────────────────────────────
-sentence-transformers==2.2.2
-torch>=2.0.0
+# ── Testing (Optional) ───────────────────────────────────────────────
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
 
-# ── Vector Store ─────────────────────────────────────────────────────
-chromadb==0.4.18
-
-# ── Data Validation ─────────────────────────────────────────────────
-pydantic==2.5.2
-pydantic-settings==2.1.0
-
-# ── Database ─────────────────────────────────────────────────────────
-aiosqlite==0.19.0
-
-# ── Utilities ────────────────────────────────────────────────────────
-python-dotenv==1.0.0
-jinja2==3.1.2
-pyyaml==6.0.1
-
-# ── Testing ──────────────────────────────────────────────────────────
-pytest==7.4.3
-pytest-asyncio==0.23.2
-
-# ── Reporting ────────────────────────────────────────────────────────
-pandas==2.1.4
-tabulate==0.9.0
+# ── Optional: Neural Embeddings & Persistent Vector Database ─────────
+# (Note: Built-in in-memory fallback is active if these are omitted)
+# sentence-transformers>=2.2.0
+# chromadb>=0.4.0
