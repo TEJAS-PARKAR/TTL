@@ -97,7 +97,17 @@ securecodeguard/
    ```
 
 5. **Install the default local LLM** (required for LLM-assisted reviews):
-   Make sure Ollama is installed and running, then pull the exact model tag configured in `.env`:
+   The `ollama` Python package installed by `pip install -r requirements.txt` is only a client library. The `ollama` command and model runtime must be installed separately. On Linux, install Ollama with:
+   ```bash
+   curl -fsSL https://ollama.com/install.sh | sh
+   ```
+
+   Start the Ollama server in one terminal and leave it running:
+   ```bash
+   ollama serve
+   ```
+
+   In another terminal, pull the exact model tag configured in `.env`:
    ```bash
    ollama pull qwen2.5:3b-instruct-q4_K_M
    ollama list
