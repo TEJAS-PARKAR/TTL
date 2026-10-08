@@ -58,7 +58,7 @@ class Settings(BaseSettings):
 
     # ── Ollama / Local LLM ───────────────────────────────────────────
     ollama_base_url: str = Field(default="http://localhost:11434")
-    ollama_model: str = Field(default="mistral:7b-instruct-v0.3-q4_K_M")
+    ollama_model: str = Field(default="qwen2.5:3b-instruct-q4_K_M")
     ollama_timeout: int = Field(default=120)
 
     # ── Embedding Model ─────────────────────────────────────────────

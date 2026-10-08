@@ -59,6 +59,7 @@ class OllamaClient:
         system_prompt: str = "",
         temperature: float = 0.1,
         max_tokens: int = 4096,
+        output_format: Optional[str] = None,
     ) -> str:
         """
         Generate a completion from the local LLM.
@@ -88,6 +89,8 @@ class OllamaClient:
                 "num_predict": max_tokens,
             },
         }
+        if output_format:
+            payload["format"] = output_format
 
         try:
             logger.info("Sending request to Ollama model: %s", self.model)
@@ -108,7 +111,11 @@ class OllamaClient:
             logger.error("Ollama request timed out after %ds", self.timeout)
             return ""
         except httpx.HTTPStatusError as e:
-            logger.error("Ollama HTTP error: %s", e)
+            logger.error(
+                "Ollama HTTP error: %s; response: %s",
+                e,
+                e.response.text[:1000],
+            )
             return ""
         except Exception as e:
             logger.error("Ollama error: %s", e)
@@ -119,13 +126,20 @@ class OllamaClient:
         prompt: str,
         system_prompt: str = "",
         temperature: float = 0.1,
+        max_tokens: int = 1024,
     ) -> Optional[Dict[str, Any]]:
         """
         Generate a response and attempt to parse it as JSON.
 
         Extracts JSON from markdown code blocks if present.
         """
-        raw = self.generate(prompt, system_prompt, temperature)
+        raw = self.generate(
+            prompt,
+            system_prompt,
+            temperature,
+            max_tokens=max_tokens,
+            output_format="json",
+        )
         if not raw:
             return None
 

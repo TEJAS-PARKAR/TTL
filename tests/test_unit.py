@@ -575,6 +575,29 @@ class TestMetadataFilters:
 class TestJSONExtraction:
     """Tests for extracting JSON from LLM responses."""
 
+    def test_generate_json_requests_json_mode(self, monkeypatch):
+        from app.review.llm_client import OllamaClient
+
+        captured = {}
+
+        class FakeResponse:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"response": '{"findings": []}'}
+
+        def fake_post(url, json, timeout):
+            captured.update(json)
+            return FakeResponse()
+
+        monkeypatch.setattr("app.review.llm_client.httpx.post", fake_post)
+        result = OllamaClient().generate_json("Analyze this code")
+
+        assert result == {"findings": []}
+        assert captured["format"] == "json"
+        assert captured["options"]["num_predict"] == 1024
+
     def test_pure_json(self):
         from app.review.llm_client import extract_json
 

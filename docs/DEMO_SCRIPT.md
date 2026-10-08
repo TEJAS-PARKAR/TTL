@@ -7,11 +7,18 @@ This guide provides a scripted walkthrough demonstrating all features of SecureC
 ---
 
 ### Step 1: Launch the Application
-Run the Streamlit web application:
+On first setup, make sure Ollama is running and pull the configured default model:
+```bash
+ollama pull qwen2.5:3b-instruct-q4_K_M
+ollama list
+```
+Then run the Streamlit web application:
 ```bash
 streamlit run ui/streamlit_app.py
 ```
 Open your browser at `http://localhost:8501`.
+
+If you change `OLLAMA_MODEL` in `.env`, pull that exact model tag and restart Streamlit before the demo.
 
 ---
 

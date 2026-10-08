@@ -31,8 +31,8 @@
                    v
 +-------------------------------------------------------------------------+
 |                       LOCAL LLM EXECUTION LAYER                         |
-|  Ollama REST Client (Mistral-7B / Llama-3 / Codellama)                  |
-|  - Strict system prompt confinement & zero external data leakage        |
+|  Ollama REST Client (Qwen 2.5 3B default; configurable model)            |
+|  - JSON-constrained output and strict system prompt confinement          |
 +-------------------------------------------------------------------------+
 ```
 

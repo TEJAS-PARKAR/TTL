@@ -57,7 +57,7 @@ securecodeguard/
 ├── scripts/
 │   └── run_evaluation.py       # Automated evaluation benchmark runner
 ├── tests/
-│   └── test_unit.py            # Comprehensive unit test suite (49 tests)
+│   └── test_unit.py            # Comprehensive unit test suite (50 tests)
 └── ui/
     └── streamlit_app.py        # Streamlit web application
 ```
@@ -68,7 +68,7 @@ securecodeguard/
 
 ### Prerequisites
 - Python 3.10+
-- (Optional for neural LLM generation) [Ollama](https://ollama.com/) with `mistral:7b-instruct-v0.3-q4_K_M` or `llama3:8b`
+- (Optional for neural LLM generation) [Ollama](https://ollama.com/) with `qwen2.5:3b-instruct-q4_K_M` (the default, suitable for lower-memory systems)
 
 ### Installation
 
@@ -96,6 +96,14 @@ securecodeguard/
    cp .env.example .env
    ```
 
+5. **Install the default local LLM** (required for LLM-assisted reviews):
+   Make sure Ollama is installed and running, then pull the exact model tag configured in `.env`:
+   ```bash
+   ollama pull qwen2.5:3b-instruct-q4_K_M
+   ollama list
+   ```
+   The model should appear in the list before you launch the app. This 3B quantized model is the default for lower-memory systems. Deterministic checks can still run without Ollama, but LLM-assisted reviews will not.
+
 ---
 
 ## 5. Running the Application
@@ -113,6 +121,12 @@ streamlit run app.py
 ```
 Open [http://localhost:8501](http://localhost:8501) in your web browser.
 
+### Ollama Troubleshooting
+- If the app reports that the model is unavailable, run `ollama list` and install the exact value of `OLLAMA_MODEL` from `.env` with `ollama pull <model-tag>`.
+- After changing `OLLAMA_MODEL`, pull that exact tag and restart the app so it loads the new setting.
+- If generation fails with an HTTP 500 or Ollama reports that its runner was terminated, the model may exceed available memory. Use the default `qwen2.5:3b-instruct-q4_K_M`, close memory-heavy applications, or choose a smaller quantized model.
+- To check that inference works independently of SecureCodeGuard, run `ollama run qwen2.5:3b-instruct-q4_K_M "Reply with OK"`. A missing model or failed inference can otherwise appear as a response-parsing error in the review summary.
+
 ---
 
 ## 6. Running Tests & Benchmarks
@@ -121,7 +135,7 @@ Open [http://localhost:8501](http://localhost:8501) in your web browser.
 ```bash
 pytest tests/test_unit.py -v
 ```
-*(49 unit tests covering parsing, chunking, deterministic checks, RAG, prompt defense, schemas, and scoring)*
+*(50 unit tests covering parsing, chunking, deterministic checks, RAG, prompt defense, schemas, and scoring)*
 
 ### Run Ground Truth Evaluation
 ```bash
