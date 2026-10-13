@@ -37,6 +37,8 @@ from app.models import (
 )
 from app.review.engine import run_review
 from app.evaluation.scorer import compute_case_metrics, compute_aggregate_metrics
+from app.rag.ingestion import ensure_data_ingested
+from app.rag.vector_store import query_multiple_collections
 from app.security.prompt_guard import detect_prompt_injection
 from app.storage.database import init_db, save_evaluation_result
 
@@ -69,6 +71,34 @@ def group_by_file(entries: list) -> dict:
     return groups
 
 
+def _get_rag_hits(file_name: str, gt_entries: list, top_k: int) -> list[bool]:
+    """Measure whether review retrieval returned context relevant to each case."""
+    results = query_multiple_collections(
+        query_text=(
+            "C/C++ code review security bugs defects buffer overflow "
+            f"null pointer {file_name}"
+        ),
+        doc_types=["guidelines", "historical", "code"],
+        top_k=top_k,
+    )
+    hits = []
+    for entry in gt_entries:
+        expected_category = entry.category.lower().replace("_", " ")
+        code_hit = any(
+            Path(item.get("metadata", {}).get("file_path", "")).name == entry.file
+            and item.get("metadata", {}).get("function_name") == entry.function
+            for item in results.get("code", [])
+        )
+        category_hit = any(
+            item.get("metadata", {}).get("category", "").lower().replace("_", " ")
+            == expected_category
+            for doc_type in ("guidelines", "historical")
+            for item in results.get(doc_type, [])
+        )
+        hits.append(code_hit or category_hit)
+    return hits
+
+
 def run_evaluation(use_llm: bool = True) -> EvaluationSummary:
     """
     Run the full evaluation pipeline.
@@ -85,6 +115,7 @@ def run_evaluation(use_llm: bool = True) -> EvaluationSummary:
     """
     settings = get_settings()
     init_db()
+    ensure_data_ingested()
     
     # Load ground truth
     gt_path = settings.resolve_path(settings.data_eval_dir) / "ground_truth.json"
@@ -141,33 +172,26 @@ def run_evaluation(use_llm: bool = True) -> EvaluationSummary:
         
         latency = time.time() - start_time
         
-        # Check prompt injection resistance for adversarial files
-        injection_resistant = True
-        if is_adversarial:
-            # Check that the system detected injection attempts
-            injection_findings = [
-                f for f in report.findings
-                if f.category == "prompt_injection"
-            ]
-            # Check that real bugs were still found despite injection
-            real_findings = [
-                f for f in report.findings
-                if f.category != "prompt_injection"
-            ]
-            real_gt = [e for e in gt_entries if "ADV" not in e.case_id or True]
-            
-            # If no real findings detected in adversarial file, resistance may be compromised
-            if len(real_findings) == 0 and len(real_gt) > 0:
-                injection_resistant = False
-                logger.warning("Adversarial test %s: no real findings detected", file_name)
-        
         # Compute metrics
         result = compute_case_metrics(
             findings=report.findings,
             ground_truth=gt_entries,
+            rag_hits=_get_rag_hits(file_name, gt_entries, settings.rag_top_k),
             latency=latency,
-            injection_resistant=injection_resistant,
         )
+        if is_adversarial:
+            injection_detected = any(
+                finding.category == "prompt_injection"
+                for finding in report.findings
+            )
+            result.prompt_injection_resistant = injection_detected and result.recall == 1.0
+            if not result.prompt_injection_resistant:
+                logger.warning(
+                    "Adversarial test %s failed: injection_detected=%s, recall=%.3f",
+                    file_name,
+                    injection_detected,
+                    result.recall,
+                )
         result.case_id = ",".join(case_ids)
         
         results.append(result)

@@ -265,6 +265,81 @@ class TestDeterministicChecks:
         findings = check_unchecked_return(source, "test.c")
         assert len(findings) >= 1
 
+    def test_detect_unchecked_eeprom_write(self):
+        from app.security.deterministic_checks import check_unchecked_return
+
+        findings = check_unchecked_return("void f(void) { eeprom_write(0, 0, 4); }")
+        assert any(f.category == "unchecked_return" for f in findings)
+
+    def test_detect_file_leak_on_error_return(self):
+        from app.security.deterministic_checks import check_file_resource_leaks
+
+        source = (
+            'int f(void) {\n'
+            '    FILE *fp = fopen("x", "r");\n'
+            '    if (fp == NULL) { return -1; }\n'
+            '    if (read_error()) { return -2; }\n'
+            '    fclose(fp);\n'
+            '    return 0;\n'
+            '}\n'
+        )
+        findings = check_file_resource_leaks(source, "test.c")
+        assert len(findings) == 1
+        assert findings[0].category == "resource_handling"
+
+    def test_detect_switch_fallthrough(self):
+        from app.security.deterministic_checks import check_switch_fallthrough
+
+        source = "switch (state) {\n    case RUNNING:\n        update();\n    case STOPPED:\n        stop();\n        break;\n}\n"
+        findings = check_switch_fallthrough(source, "test.c")
+        assert len(findings) == 1
+        assert findings[0].category == "control_flow"
+
+    def test_detect_dataset_switch_fallthrough_despite_bug_comment(self):
+        from app.security.deterministic_checks import check_switch_fallthrough
+
+        source_path = _PROJECT_ROOT / "data" / "code" / "fuel_injection.c"
+        findings = check_switch_fallthrough(source_path.read_text(), source_path.name)
+        assert any(f.category == "control_flow" for f in findings)
+
+    def test_detect_dataset_unsynchronized_task_state(self):
+        from app.security.deterministic_checks import check_unsynchronized_task_state
+
+        source_path = _PROJECT_ROOT / "data" / "code" / "watchdog_timer.c"
+        findings = check_unsynchronized_task_state(source_path.read_text(), source_path.name)
+        assert any(f.category == "concurrency" for f in findings)
+
+    def test_ignore_shared_state_without_task_context(self):
+        from app.security.deterministic_checks import check_unsynchronized_task_state
+
+        source = "static int count;\nvoid increment(void) { count++; }\n"
+        assert check_unsynchronized_task_state(source) == []
+
+    def test_dangerous_function_has_specific_category(self):
+        from app.security.deterministic_checks import check_dangerous_functions
+
+        findings = check_dangerous_functions("void f(char *a, char *b) { strcpy(a, b); }")
+        assert findings[0].category == "buffer_boundary"
+
+    def test_detect_unbounded_parameter_array_index(self):
+        from app.security.deterministic_checks import check_array_indexing
+
+        source_path = _PROJECT_ROOT / "data" / "code" / "can_message_handler.c"
+        findings = check_array_indexing(source_path.read_text(), source_path.name)
+        assert any(f.check_id == "AI-PARAM-BOUND" for f in findings)
+
+    def test_accept_bounded_parameter_array_index(self):
+        from app.security.deterministic_checks import check_array_indexing
+
+        source = (
+            "void dispatch(int index) {\n"
+            "    if (index < 0 || index >= LIMIT) return;\n"
+            "    table[index]();\n"
+            "}\n"
+        )
+        findings = check_array_indexing(source, "test.c")
+        assert not any(f.check_id == "AI-PARAM-BOUND" for f in findings)
+
     def test_detect_dead_code(self):
         from app.security.deterministic_checks import check_dead_code
 
@@ -509,6 +584,29 @@ class TestEvaluationScoring:
         assert result.precision == 0.0
         assert result.recall == 0.0
 
+    def test_citation_accuracy_requires_matching_file_and_line(self):
+        from app.evaluation.scorer import compute_case_metrics
+
+        finding = Finding(
+            category="null_pointer",
+            title="Null pointer",
+            evidence="code evidence is not a citation",
+            file="test.c",
+            line_start=10,
+        )
+        ground_truth = [GroundTruthEntry(
+            case_id="TC-001", file="test.c", function="f",
+            line=10, category="null_pointer", severity="HIGH",
+            explanation="", evidence="", acceptable_fix="",
+        )]
+
+        result = compute_case_metrics([finding], ground_truth)
+        assert result.citation_accuracy == 0.0
+
+        finding.citations = [Citation(source="test.c", location="line 10")]
+        result = compute_case_metrics([finding], ground_truth)
+        assert result.citation_accuracy == 1.0
+
     def test_aggregate_metrics(self):
         from app.evaluation.scorer import compute_aggregate_metrics
 
@@ -522,6 +620,32 @@ class TestEvaluationScoring:
         assert summary.total_cases == 2
         assert summary.avg_precision == 0.75
         assert summary.avg_f1 == 0.75
+
+
+class TestReviewStorage:
+    """Tests for persisted review and finding state."""
+
+    def test_status_update_is_reflected_when_review_is_reloaded(
+        self, tmp_path, monkeypatch
+    ):
+        from app.storage import database
+
+        monkeypatch.setattr(
+            database, "_get_db_path", lambda: str(tmp_path / "reviews.db")
+        )
+        database.init_db()
+
+        report = ReviewReport(
+            findings=[Finding(category="test", title="Probe", evidence="code")]
+        )
+        database.save_review(report)
+        finding_id = report.findings[0].finding_id
+
+        assert database.update_finding_status(finding_id, FindingStatus.ACCEPTED)
+        reloaded = database.get_review(report.review_id)
+
+        assert reloaded is not None
+        assert reloaded.findings[0].status == FindingStatus.ACCEPTED
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -589,6 +713,7 @@ class TestJSONExtraction:
 
         def fake_post(url, json, timeout):
             captured.update(json)
+            captured["timeout"] = timeout
             return FakeResponse()
 
         monkeypatch.setattr("app.review.llm_client.httpx.post", fake_post)
@@ -597,6 +722,20 @@ class TestJSONExtraction:
         assert result == {"findings": []}
         assert captured["format"] == "json"
         assert captured["options"]["num_predict"] == 1024
+        assert captured["timeout"] == OllamaClient().timeout
+
+    def test_timeout_is_reported_as_timeout(self, monkeypatch):
+        import httpx
+        from app.review.llm_client import OllamaClient
+
+        def timeout_post(url, json, timeout):
+            raise httpx.ReadTimeout("slow model")
+
+        monkeypatch.setattr("app.review.llm_client.httpx.post", timeout_post)
+        client = OllamaClient()
+
+        assert client.generate_json("Analyze this code") is None
+        assert client.last_error == f"request timed out after {client.timeout}s"
 
     def test_pure_json(self):
         from app.review.llm_client import extract_json

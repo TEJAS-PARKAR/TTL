@@ -42,6 +42,22 @@ class _InMemoryCollection:
         self.data["embeds"].extend(embeddings)
         self.data["metas"].extend(metadatas)
 
+    def upsert(self, ids, documents, embeddings, metadatas):
+        for doc_id, document, embedding, metadata in zip(
+            ids, documents, embeddings, metadatas
+        ):
+            try:
+                index = self.data["ids"].index(doc_id)
+            except ValueError:
+                self.data["ids"].append(doc_id)
+                self.data["docs"].append(document)
+                self.data["embeds"].append(embedding)
+                self.data["metas"].append(metadata)
+            else:
+                self.data["docs"][index] = document
+                self.data["embeds"][index] = embedding
+                self.data["metas"][index] = metadata
+
     def count(self):
         return len(self.data["ids"])
 
@@ -151,7 +167,7 @@ def add_documents(
                     clean[k] = str(v)
             clean_meta.append(clean)
 
-        collection.add(
+        collection.upsert(
             ids=batch_ids,
             documents=batch_texts,
             embeddings=batch_embeds,

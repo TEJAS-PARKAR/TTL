@@ -57,7 +57,7 @@ securecodeguard/
 ├── scripts/
 │   └── run_evaluation.py       # Automated evaluation benchmark runner
 ├── tests/
-│   └── test_unit.py            # Comprehensive unit test suite (50 tests)
+│   └── test_unit.py            # Comprehensive unit test suite (60 tests)
 └── ui/
     └── streamlit_app.py        # Streamlit web application
 ```
@@ -131,9 +131,17 @@ streamlit run app.py
 ```
 Open [http://localhost:8501](http://localhost:8501) in your web browser.
 
+To run the FastAPI backend separately:
+```bash
+python -m app.main
+```
+The API documentation is available at [http://localhost:8000/docs](http://localhost:8000/docs).
+With Docker Compose, `docker compose up --build` starts both the UI and API.
+
 ### Ollama Troubleshooting
 - If the app reports that the model is unavailable, run `ollama list` and install the exact value of `OLLAMA_MODEL` from `.env` with `ollama pull <model-tag>`.
 - After changing `OLLAMA_MODEL`, pull that exact tag and restart the app so it loads the new setting.
+- CPU inference can take longer than two minutes on larger reviews. The default `OLLAMA_TIMEOUT` is 300 seconds; increase it in `.env` if the model still times out.
 - If generation fails with an HTTP 500 or Ollama reports that its runner was terminated, the model may exceed available memory. Use the default `qwen2.5:3b-instruct-q4_K_M`, close memory-heavy applications, or choose a smaller quantized model.
 - To check that inference works independently of SecureCodeGuard, run `ollama run qwen2.5:3b-instruct-q4_K_M "Reply with OK"`. A missing model or failed inference can otherwise appear as a response-parsing error in the review summary.
 
@@ -145,7 +153,7 @@ Open [http://localhost:8501](http://localhost:8501) in your web browser.
 ```bash
 pytest tests/test_unit.py -v
 ```
-*(50 unit tests covering parsing, chunking, deterministic checks, RAG, prompt defense, schemas, and scoring)*
+*(60 unit tests covering parsing, chunking, deterministic checks, RAG, prompt defense, schemas, storage, and scoring)*
 
 ### Run Ground Truth Evaluation
 ```bash

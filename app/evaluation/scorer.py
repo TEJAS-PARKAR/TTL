@@ -9,9 +9,12 @@ ground truth.
 from __future__ import annotations
 
 import logging
+import re
+from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 from app.models import (
+    Citation,
     EvaluationResult,
     EvaluationSummary,
     Finding,
@@ -127,13 +130,12 @@ def compute_case_metrics(
                 matched_findings.add(fi)
 
                 # Citation accuracy: does the finding cite the correct location?
-                has_citation = False
-                for cit in finding.citations:
-                    if gt.file in cit.source or cit.source in gt.file:
-                        has_citation = True
-                        break
-                if finding.evidence and finding.evidence != "insufficient evidence":
-                    has_citation = True
+                has_citation = any(
+                    _citation_matches_ground_truth(
+                        citation, gt, finding.line_start
+                    )
+                    for citation in finding.citations
+                )
                 citation_scores.append(1.0 if has_citation else 0.0)
                 break
 
@@ -177,6 +179,32 @@ def compute_case_metrics(
             f"matched {tp}/{len(ground_truth)} ground truth entries"
         ),
     )
+
+
+def _citation_matches_ground_truth(
+    citation: Citation,
+    ground_truth: GroundTruthEntry,
+    finding_line: Optional[int],
+) -> bool:
+    """Require a citation to identify the expected file and line."""
+    if finding_line is None or abs(finding_line - ground_truth.line) > 5:
+        return False
+
+    source = citation.source or ""
+    if ground_truth.file not in source and Path(source).name != ground_truth.file:
+        return False
+
+    location = re.search(
+        r'\blines?\s+(\d+)(?:\s*[-–]\s*(\d+))?',
+        citation.location or "",
+        re.IGNORECASE,
+    )
+    if not location:
+        return False
+
+    start = int(location.group(1))
+    end = int(location.group(2) or start)
+    return start <= finding_line <= end
 
 
 def compute_aggregate_metrics(

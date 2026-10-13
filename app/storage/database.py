@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -175,7 +175,7 @@ def save_review(report: ReviewReport) -> str:
            VALUES (?, ?, ?, ?, ?)""",
         (
             f"AUD-{report.review_id}",
-            datetime.utcnow().isoformat(),
+            datetime.now(timezone.utc).isoformat(),
             "REVIEW_CREATED",
             report.review_id,
             f"Review created with {len(report.findings)} findings",
@@ -199,11 +199,22 @@ def get_review(review_id: str) -> Optional[ReviewReport]:
         (review_id,),
     )
     row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None
+
+    report = ReviewReport.model_validate_json(row[0])
+    cursor.execute(
+        "SELECT finding_id, status FROM findings WHERE review_id = ?",
+        (review_id,),
+    )
+    statuses = {finding_id: status for finding_id, status in cursor.fetchall()}
     conn.close()
 
-    if row:
-        return ReviewReport.model_validate_json(row[0])
-    return None
+    for finding in report.findings:
+        if finding.finding_id in statuses:
+            finding.status = FindingStatus(statuses[finding.finding_id])
+    return report
 
 
 def list_reviews() -> List[dict]:
@@ -275,8 +286,8 @@ def update_finding_status(
             old_status, new_status, notes)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            f"AUD-{finding_id}-{datetime.utcnow().strftime('%H%M%S')}",
-            datetime.utcnow().isoformat(),
+            f"AUD-{finding_id}-{datetime.now(timezone.utc).strftime('%H%M%S')}",
+            datetime.now(timezone.utc).isoformat(),
             "STATUS_CHANGE",
             user,
             review_id,
@@ -359,7 +370,7 @@ def save_evaluation_result(result: EvaluationResult) -> None:
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             result.case_id,
-            datetime.utcnow().isoformat(),
+            datetime.now(timezone.utc).isoformat(),
             result.precision,
             result.recall,
             result.f1,

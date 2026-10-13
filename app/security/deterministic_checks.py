@@ -19,6 +19,8 @@ import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from app.parsers.code_chunker import chunk_code_file
+
 
 @dataclass
 class HeuristicFinding:
@@ -57,7 +59,7 @@ _DANGEROUS_FUNCS = {
 _MUST_CHECK_RETURN = {
     "malloc", "calloc", "realloc", "fopen", "fread", "fwrite",
     "fclose", "pthread_create", "pthread_mutex_lock",
-    "send", "recv", "read", "write",
+    "send", "recv", "read", "write", "eeprom_write",
 }
 
 
@@ -84,7 +86,11 @@ def check_dangerous_functions(
             if re.search(pattern, line):
                 findings.append(HeuristicFinding(
                     check_id=f"DC-{func.upper()}",
-                    category="unsafe_function",
+                    category=(
+                        "buffer_boundary"
+                        if func in {"strcpy", "strcat", "sprintf"}
+                        else "unsafe_input"
+                    ),
                     title=desc,
                     file=file_path,
                     line=lineno,
@@ -156,6 +162,66 @@ def check_array_indexing(
                     ),
                     rule_refs=["RULE-003"],
                 ))
+
+    for chunk in chunk_code_file(source, file_path):
+        if not chunk.function_name:
+            continue
+        header = re.search(
+            rf'^\s*(?:[\w]+\s+)+\*?\s*{re.escape(chunk.function_name)}\s*'
+            r'\(([^)]*)\)\s*\{',
+            chunk.text,
+            re.MULTILINE,
+        )
+        if not header:
+            continue
+
+        parameters = {}
+        for parameter in header.group(1).split(","):
+            parameter = parameter.strip()
+            if not parameter or parameter == "void":
+                continue
+            name_match = re.search(r'([A-Za-z_]\w*)\s*(?:\[[^]]*\])?$', parameter)
+            if name_match:
+                name = name_match.group(1)
+                parameters[name] = parameter[:name_match.start()]
+
+        for access in re.finditer(r'\b(\w+)\s*\[\s*(\w+)\s*\]', chunk.text):
+            index_name = access.group(2)
+            parameter_type = parameters.get(index_name)
+            if parameter_type is None:
+                continue
+
+            preceding_code = chunk.text[:access.start()]
+            upper_bound = re.search(
+                rf'if\s*\([^)]*\b{re.escape(index_name)}\s*'
+                r'(?:>=\s*\w+|<\s*(?!0\b)\w+)',
+                preceding_code,
+            )
+            is_unsigned = bool(re.search(r'\b(?:unsigned|uint\d+_t)\b', parameter_type))
+            lower_bound = is_unsigned or bool(re.search(
+                rf'if\s*\([^)]*\b{re.escape(index_name)}\s*(?:<\s*0|>=\s*0|>\s*-1)',
+                preceding_code,
+            ))
+            if upper_bound and lower_bound:
+                continue
+
+            line = chunk.line_start + chunk.text[:access.start()].count("\n")
+            findings.append(HeuristicFinding(
+                check_id="AI-PARAM-BOUND",
+                category="buffer_boundary",
+                title=f"Array index parameter '{index_name}' may be unbounded",
+                file=file_path,
+                line=line,
+                snippet=access.group(0),
+                severity="HIGH",
+                explanation=(
+                    f"Heuristic: parameter '{index_name}' is used as an array index "
+                    "without a preceding upper-bound check and, for signed types, "
+                    "a lower-bound check."
+                ),
+                rule_refs=["RULE-003"],
+                confidence=0.7,
+            ))
     return findings
 
 
@@ -254,6 +320,173 @@ def check_unchecked_return(
                 rule_refs=["RULE-005"],
             ))
     return findings
+
+
+def check_file_resource_leaks(
+    source: str, file_path: str = "unknown"
+) -> List[HeuristicFinding]:
+    """Detect file handles left open on an early return after fopen()."""
+    findings: List[HeuristicFinding] = []
+    lines = _lines_with_numbers(source)
+
+    for i, (lineno, line) in enumerate(lines):
+        match = re.search(r'\b(\w+)\s*=\s*fopen\s*\(', line)
+        if not match:
+            continue
+        variable = match.group(1)
+        depth = sum(text.count("{") - text.count("}") for _, text in lines[:i + 1])
+        function_depth = depth
+        null_guard = False
+
+        for next_lineno, next_line in lines[i + 1:]:
+            stripped = next_line.strip()
+            if re.search(rf'\bfclose\s*\(\s*{re.escape(variable)}\s*\)', next_line):
+                break
+            if re.search(
+                rf'if\s*\(\s*(?:{re.escape(variable)}\s*==\s*NULL|!\s*{re.escape(variable)})\s*\)',
+                next_line,
+            ):
+                null_guard = not bool(re.search(r'\breturn\b', stripped))
+            elif re.search(r'\breturn\b', stripped):
+                if not null_guard:
+                    findings.append(HeuristicFinding(
+                        check_id="RL-FOPEN",
+                        category="resource_handling",
+                        title=f"File handle '{variable}' may leak on early return",
+                        file=file_path,
+                        line=next_lineno,
+                        snippet=stripped,
+                        severity="MEDIUM",
+                        explanation=(
+                            f"Heuristic: {variable} was opened with fopen() and this "
+                            "return occurs before a matching fclose()."
+                        ),
+                        rule_refs=["RULE-009"],
+                    ))
+                    break
+                null_guard = False
+
+            depth += next_line.count("{") - next_line.count("}")
+            if depth < function_depth:
+                break
+
+    return findings
+
+
+def check_switch_fallthrough(
+    source: str, file_path: str = "unknown"
+) -> List[HeuristicFinding]:
+    """Flag case labels that reach the next case without an exit or annotation."""
+    findings: List[HeuristicFinding] = []
+    annotation_lines = {
+        lineno
+        for lineno, line in _lines_with_numbers(source)
+        if re.search(
+            r'(?://\s*|/\*\s*)(?:intentional(?:ly)?\s+)?falls?\s+through\s*(?:\*/)?$',
+            line.strip(),
+            re.IGNORECASE,
+        )
+    }
+    scan_source = re.sub(
+        r'/\*.*?\*/',
+        lambda match: "\n" * match.group(0).count("\n"),
+        source,
+        flags=re.DOTALL,
+    )
+    scan_source = re.sub(r'//[^\n]*', '', scan_source)
+    lines = _lines_with_numbers(scan_source)
+    case_re = re.compile(r'^\s*(?:case\b.*|default\s*:)')
+
+    for i, (lineno, line) in enumerate(lines):
+        if not case_re.match(line):
+            continue
+        indentation = len(line) - len(line.lstrip())
+        falls_through_to = None
+        terminated = False
+
+        for next_lineno, next_line in lines[i + 1:]:
+            if case_re.match(next_line):
+                next_indentation = len(next_line) - len(next_line.lstrip())
+                if next_indentation == indentation:
+                    falls_through_to = next_lineno
+                    break
+            stripped = next_line.strip()
+            if re.search(r'\b(?:break|return|goto)\b', stripped):
+                terminated = True
+                break
+            if next_lineno in annotation_lines:
+                terminated = True
+                break
+
+        if falls_through_to is not None and not terminated:
+            findings.append(HeuristicFinding(
+                check_id="CF-FALLTHROUGH",
+                category="control_flow",
+                title="Switch case may fall through without an annotation",
+                file=file_path,
+                line=lineno,
+                snippet=line.strip(),
+                severity="MEDIUM",
+                explanation=(
+                    f"Heuristic: this case reaches the next case at line "
+                    f"{falls_through_to} without break, return, or a fall-through annotation."
+                ),
+                rule_refs=["RULE-011"],
+            ))
+
+    return findings
+
+
+def check_unsynchronized_task_state(
+    source: str, file_path: str = "unknown"
+) -> List[HeuristicFinding]:
+    """Flag mutable file-scope state in task/thread/ISR modules without lock calls."""
+    task_function = re.search(
+        r'^\s*(?:static\s+)?(?:void|int|uint\d+_t|size_t)\s+'
+        r'[A-Za-z_]\w*(?:task|thread|isr)\w*\s*\(',
+        source,
+        re.IGNORECASE | re.MULTILINE,
+    )
+    synchronization = re.search(
+        r'\b(?:pthread_mutex_(?:lock|unlock)|mutex_(?:lock|unlock)|'
+        r'taskENTER_CRITICAL|taskEXIT_CRITICAL|enter_critical|exit_critical|'
+        r'atomic_[A-Za-z_]+|__disable_irq|__enable_irq)\s*\(',
+        source,
+    )
+    if not task_function or synchronization:
+        return []
+
+    declaration_re = re.compile(
+        r'^\s*static\s+(?:[\w]+\s+)+(?:\*+\s*)?(\w+)\s*'
+        r'(?:\[[^]]*\])?\s*(?:=[^;]+)?;',
+    )
+    for lineno, line in _lines_with_numbers(source):
+        declaration = declaration_re.match(line)
+        if not declaration:
+            continue
+        variable = declaration.group(1)
+        references = list(re.finditer(rf'\b{re.escape(variable)}\b', source))
+        write_pattern = re.compile(
+            rf'\b{re.escape(variable)}\b(?:\s*\[[^]]+\])?'
+            r'(?:\s*\.\w+)?\s*(?:=|\+\+|--|\+=|-=)'
+        )
+        if len(references) > 2 and write_pattern.search(source):
+            return [HeuristicFinding(
+                check_id="CC-SHARED",
+                category="concurrency",
+                title=f"Shared mutable state '{variable}' may be unsynchronized",
+                file=file_path,
+                line=lineno,
+                snippet=line.strip(),
+                severity="MEDIUM",
+                explanation=(
+                    "Heuristic: mutable file-scope state is used in a module with "
+                    "task/thread/ISR entry points and no recognized synchronization calls."
+                ),
+                rule_refs=["RULE-012"],
+                confidence=0.6,
+            )]
+    return []
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -360,6 +593,9 @@ def run_all_heuristic_checks(
     results.extend(check_array_indexing(source, file_path))
     results.extend(check_null_pointer(source, file_path))
     results.extend(check_unchecked_return(source, file_path))
+    results.extend(check_file_resource_leaks(source, file_path))
+    results.extend(check_switch_fallthrough(source, file_path))
+    results.extend(check_unsynchronized_task_state(source, file_path))
     results.extend(check_integer_overflow(source, file_path))
     results.extend(check_dead_code(source, file_path))
     return results

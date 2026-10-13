@@ -23,7 +23,7 @@ from app.parsers.log_parser import (
     parse_guidelines_json,
     parse_static_analysis_json,
 )
-from app.rag.vector_store import add_documents
+from app.rag.vector_store import add_documents, get_collection_count
 
 logger = logging.getLogger(__name__)
 
@@ -288,3 +288,17 @@ def ingest_all_data() -> dict:
 
     logger.info("Ingestion summary: %s", summary)
     return summary
+
+
+def ensure_data_ingested() -> dict:
+    """Load bundled knowledge when the core RAG collections are empty."""
+    settings = get_settings()
+    required_collections = (
+        settings.chroma_collection_code,
+        settings.chroma_collection_guidelines,
+        settings.chroma_collection_static,
+        settings.chroma_collection_historical,
+    )
+    if all(get_collection_count(name) > 0 for name in required_collections):
+        return {"already_ingested": True}
+    return ingest_all_data()

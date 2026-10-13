@@ -32,6 +32,7 @@ from app.models import (
 )
 from app.review.engine import run_review
 from app.review.report_exporter import export_json, export_markdown
+from app.rag.ingestion import ensure_data_ingested
 from app.security.deterministic_checks import run_all_heuristic_checks
 from app.security.prompt_guard import detect_prompt_injection
 from app.storage.database import (
@@ -169,6 +170,7 @@ st.markdown("""
 def initialize():
     """Initialize database on first run."""
     init_db()
+    ensure_data_ingested()
     return True
 
 initialize()

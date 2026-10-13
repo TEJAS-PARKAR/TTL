@@ -27,6 +27,7 @@ class OllamaClient:
         self.base_url = self.settings.ollama_base_url.rstrip("/")
         self.model = self.settings.ollama_model
         self.timeout = self.settings.ollama_timeout
+        self.last_error: Optional[str] = None
 
     def is_available(self) -> bool:
         """Check if Ollama is reachable."""
@@ -92,6 +93,7 @@ class OllamaClient:
         if output_format:
             payload["format"] = output_format
 
+        self.last_error = None
         try:
             logger.info("Sending request to Ollama model: %s", self.model)
             resp = httpx.post(
@@ -108,9 +110,11 @@ class OllamaClient:
             )
             return response_text
         except httpx.TimeoutException:
-            logger.error("Ollama request timed out after %ds", self.timeout)
+            self.last_error = f"request timed out after {self.timeout}s"
+            logger.error("Ollama %s", self.last_error)
             return ""
         except httpx.HTTPStatusError as e:
+            self.last_error = f"HTTP error {e.response.status_code}"
             logger.error(
                 "Ollama HTTP error: %s; response: %s",
                 e,
@@ -118,6 +122,7 @@ class OllamaClient:
             )
             return ""
         except Exception as e:
+            self.last_error = str(e)
             logger.error("Ollama error: %s", e)
             return ""
 
@@ -141,9 +146,14 @@ class OllamaClient:
             output_format="json",
         )
         if not raw:
+            if self.last_error is None:
+                self.last_error = "returned an empty response"
             return None
 
-        return extract_json(raw)
+        result = extract_json(raw)
+        if result is None:
+            self.last_error = "returned a response that was not valid JSON"
+        return result
 
 
 def extract_json(text: str) -> Optional[Dict[str, Any]]:

@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
 from app.config import get_settings
+from app.rag.ingestion import ensure_data_ingested
 from app.storage.database import init_db
 
 # ── Logging Setup ───────────────────────────────────────────────────
@@ -71,6 +72,7 @@ async def startup():
     """Initialize database on startup."""
     logger.info("SecureCodeGuard starting up...")
     init_db()
+    ensure_data_ingested()
     logger.info("Database initialized.")
     logger.info("Ollama model: %s", settings.ollama_model)
     logger.info("Embedding model: %s", settings.embedding_model)

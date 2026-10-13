@@ -313,8 +313,12 @@ def run_review(
                 all_findings.extend(llm_findings)
                 logger.info("LLM returned %d findings", len(llm_findings))
             else:
-                logger.warning("LLM returned no parseable response")
-                llm_summary = "LLM did not return a parseable response."
+                error = llm.last_error or "request returned no result"
+                logger.warning("LLM review failed: %s", error)
+                llm_summary = (
+                    f"Ollama {error}. Only deterministic heuristic findings "
+                    "are included."
+                )
         else:
             logger.warning("Ollama is not available – using deterministic checks only")
             llm_summary = (
